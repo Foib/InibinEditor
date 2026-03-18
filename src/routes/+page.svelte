@@ -3,7 +3,7 @@
 	import { fix } from '$lib/inibin_fix';
 	import { writeIni, writeInibin } from '$lib/convert';
 	import type { InibinData, InibinValue } from '$lib/types';
-	import { Upload } from '@lucide/svelte';
+	import { Plus, Trash2, Upload } from '@lucide/svelte';
 	import favicon from '$lib/assets/favicon.svg';
 
 	// --- State ---
@@ -233,7 +233,7 @@
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-	class="flex h-screen flex-col overflow-hidden bg-neutral-950 text-neutral-200"
+	class="flex h-screen min-w-4xl flex-col overflow-hidden bg-neutral-950 text-neutral-200"
 	ondrop={onDrop}
 	ondragover={onDragOver}
 	ondragleave={onDragLeave}
@@ -312,7 +312,7 @@
 				type="text"
 				placeholder="Search sections or keys..."
 				bind:value={searchQuery}
-				class="rounded border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm text-neutral-200 placeholder-neutral-500 outline-none focus:border-blue-500"
+				class="border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm text-neutral-200 placeholder-neutral-500 outline-none focus:border-blue-500"
 			/>
 
 			<!-- Collapse/Expand -->
@@ -340,7 +340,7 @@
 						? 'bg-white text-black'
 						: 'bg-neutral-800 text-neutral-400 hover:text-neutral-200'}"
 				>
-					Values ({sections.length})
+					Values ({totalEntries - unknownKeys.length})
 				</button>
 				<button
 					disabled={unknownKeys.length === 0}
@@ -368,16 +368,16 @@
 					type="text"
 					bind:value={newSectionName}
 					placeholder="SectionName"
-					class="w-36 rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-200 outline-none focus:border-blue-500"
+					class="w-36 border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-200 outline-none focus:border-blue-500"
 					onkeydown={(e) => {
 						if (e.key === 'Enter') addSection();
 					}}
 				/>
 				<button
 					onclick={addSection}
-					class="cursor-pointer rounded bg-neutral-700 px-2 py-1 text-xs text-neutral-300 transition-colors hover:bg-neutral-600"
+					class="h-6 w-6 cursor-pointer rounded bg-transparent p-1 text-xs text-neutral-300 transition-colors hover:bg-neutral-700 hover:text-neutral-100"
 				>
-					+
+					<Plus class="h-full w-full" />
 				</button>
 			</div>
 
@@ -399,22 +399,22 @@
 					type="text"
 					bind:value={newEntryName}
 					placeholder="KeyName"
-					class="w-32 rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-200 outline-none focus:border-blue-500"
+					class="w-32 border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-200 outline-none focus:border-blue-500"
 				/>
 				<input
 					type="text"
 					bind:value={newEntryValue}
 					placeholder="Value"
-					class="w-32 rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-200 outline-none focus:border-blue-500"
+					class="w-32 border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-200 outline-none focus:border-blue-500"
 					onkeydown={(e) => {
 						if (e.key === 'Enter') addEntry();
 					}}
 				/>
 				<button
 					onclick={addEntry}
-					class="cursor-pointer rounded bg-neutral-700 px-2 py-1 text-xs text-neutral-300 transition-colors hover:bg-neutral-600"
+					class="h-6 w-6 cursor-pointer rounded bg-transparent p-1 text-xs text-neutral-300 transition-colors hover:bg-neutral-700 hover:text-neutral-100"
 				>
-					+
+					<Plus class="h-full w-full" />
 				</button>
 			</div>
 		</div>
@@ -436,7 +436,7 @@
 						<!-- Section header -->
 						<button
 							onclick={() => toggleSection(section)}
-							class="flex w-full cursor-pointer items-center gap-2 px-4 py-2 text-left transition-colors hover:bg-neutral-800/50"
+							class="group flex w-full cursor-pointer items-center gap-2 px-4 py-2 text-left transition-colors hover:bg-neutral-800/50"
 						>
 							<svg
 								class="h-3 w-3 text-neutral-500 transition-transform {isCollapsed
@@ -456,11 +456,11 @@
 									e.stopPropagation();
 									removeSection(section);
 								}}
-								class="rounded px-1.5 py-0.5 text-xs text-red-400 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-950 [div:hover>&]:opacity-100"
+								class="cursor-pointer text-neutral-500 opacity-0 transition-all group-hover:opacity-100 hover:text-red-400"
 								role="button"
 								tabindex="0"
 							>
-								Remove
+								<Trash2 class="h-4 w-4" />
 							</span>
 						</button>
 
@@ -483,13 +483,13 @@
 											value={formatDisplay(value)}
 											onchange={(e) =>
 												updateValue(section, name, (e.target as HTMLInputElement).value)}
-											class="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 font-mono text-xs text-emerald-400 outline-none hover:border-neutral-700 focus:border-blue-500 focus:bg-neutral-800"
+											class="min-w-0 flex-1 border border-transparent bg-transparent px-1 py-0.5 font-mono text-xs text-emerald-400 outline-none hover:border-neutral-700 focus:border-blue-500 focus:bg-neutral-800"
 										/>
 										<button
 											onclick={() => removeEntry(section, name)}
-											class="cursor-pointer rounded px-1 py-0.5 text-xs text-red-400 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-950"
+											class="cursor-pointer text-neutral-500 opacity-0 transition-all group-hover:opacity-100 hover:text-red-400"
 										>
-											x
+											<Trash2 class="h-4 w-4" />
 										</button>
 									</div>
 								{/each}
@@ -523,13 +523,13 @@
 										type="text"
 										value={formatDisplay(data.UNKNOWN_HASHES[hash])}
 										onchange={(e) => updateUnknownValue(hash, (e.target as HTMLInputElement).value)}
-										class="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 font-mono text-xs text-emerald-400 outline-none hover:border-neutral-700 focus:border-blue-500 focus:bg-neutral-800"
+										class="min-w-0 flex-1 border border-transparent bg-transparent px-1 py-0.5 font-mono text-xs text-emerald-400 outline-none hover:border-neutral-700 focus:border-blue-500 focus:bg-neutral-800"
 									/>
 									<button
 										onclick={() => removeUnknownEntry(hash)}
-										class="cursor-pointer rounded px-1 py-0.5 text-xs text-red-400 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-red-950"
+										class="cursor-pointer text-neutral-500 opacity-0 transition-all group-hover:opacity-100 hover:text-red-400"
 									>
-										x
+										<Trash2 class="h-4 w-4" />
 									</button>
 								</div>
 							{/each}
