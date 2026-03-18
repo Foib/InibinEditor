@@ -244,7 +244,9 @@
 			<img src={favicon} alt="" class="h-12 w-12" />
 			<h1 class="text-xl font-bold text-white">Inibin Editor</h1>
 			{#if data}
-				<span class="rounded bg-neutral-800 px-2 py-0.5 text-sm text-neutral-400">
+				<span
+					class="rounded-full border border-neutral-700 bg-neutral-800 px-2 py-0.5 font-mono text-sm text-neutral-400"
+				>
 					{fileName}
 				</span>
 				<span class="text-sm text-neutral-500">
@@ -308,13 +310,13 @@
 		</div>
 	{:else}
 		<!-- Toolbar -->
-		<div class="flex items-center gap-3 border-b border-neutral-800 px-6 py-3">
+		<div class="flex items-center gap-3 border-b border-neutral-800 bg-neutral-900/50 px-6 py-2">
 			<!-- Search -->
 			<input
 				type="text"
 				placeholder="Search sections or keys..."
 				bind:value={searchQuery}
-				class="border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-sm text-neutral-200 placeholder-neutral-500 outline-none focus:border-blue-500"
+				class="border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-neutral-200 placeholder-neutral-500 outline-none focus:border-blue-500"
 			/>
 
 			<!-- Collapse/Expand -->
@@ -361,7 +363,7 @@
 
 		<!-- Add section / entry controls -->
 		<div
-			class="flex flex-wrap items-center gap-3 border-b border-neutral-800 bg-neutral-900/50 px-6 py-2"
+			class="flex flex-wrap items-center gap-3 border-b border-neutral-800 bg-neutral-950 px-6 py-2"
 		>
 			<!-- Add section -->
 			<div class="flex items-center gap-2">
