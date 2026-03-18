@@ -289,11 +289,13 @@
 		<!-- Drop zone / welcome screen -->
 		<div class="flex flex-1 items-center justify-center p-8">
 			<div
-				class="flex max-w-md flex-col items-center rounded-xl border-2 border-dashed p-12 text-center transition-all duration-500 {dragging
-					? 'scale-110 border-blue-400 bg-blue-950/30'
-					: 'scale-100 border-neutral-700 bg-neutral-900/50'}"
+				class=" flex max-w-md flex-col items-center rounded-xl border-2 border-dashed px-24 py-12 text-center transition-all {dragging
+					? 'file-drop -translate-x-1.5 -translate-y-1.5 border-blue-400 bg-blue-950/30'
+					: 'file-drop-dragging  border-neutral-700 bg-neutral-900/50 '}"
 			>
-				<Upload class="mb-4 h-12 w-12 text-neutral-600" />
+				<Upload
+					class="mb-4 h-12 w-12 transition-colors {dragging ? 'text-blue-500' : 'text-neutral-600'}"
+				/>
 				<p class="mb-2 text-lg font-medium text-neutral-300">Drop an .inibin file here</p>
 				<p class="mb-4 text-sm text-neutral-500">or click the button below</p>
 				<label
@@ -540,3 +542,13 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	.file-drop {
+		filter: drop-shadow(12px 12px #000000);
+	}
+
+	.file-drop-dragging {
+		filter: drop-shadow(0px 0px #0000);
+	}
+</style>
