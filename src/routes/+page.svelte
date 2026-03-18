@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { read } from '$lib/inibin2';
 	import { fix } from '$lib/inibin_fix';
-	import { writeIni, writeInibin } from '$lib/convert';
+	import { writeIni, writeInibin, readIni } from '$lib/convert';
 	import type { InibinData, InibinValue } from '$lib/types';
 	import { Plus, Trash2, Upload } from '@lucide/svelte';
 	import favicon from '$lib/assets/favicon.svg';
@@ -57,9 +57,18 @@
 	async function loadFile(file: File) {
 		error = '';
 		try {
-			const buffer = await file.arrayBuffer();
-			const ibin = read(buffer);
-			fix(ibin);
+			const isIni = file.name.toLowerCase().endsWith('.ini');
+			let ibin: InibinData;
+
+			if (isIni) {
+				const text = await file.text();
+				ibin = readIni(text);
+			} else {
+				const buffer = await file.arrayBuffer();
+				ibin = read(buffer);
+				fix(ibin);
+			}
+
 			data = ibin;
 			fileName = file.name;
 			collapsedSections = new Set();
@@ -272,7 +281,7 @@
 					class="cursor-pointer rounded bg-neutral-700 px-3 py-1.5 text-sm font-medium text-neutral-200 transition-colors hover:bg-neutral-600"
 				>
 					Open File
-					<input type="file" accept=".inibin" class="hidden" onchange={onFileInput} />
+					<input type="file" accept=".inibin,.ini" class="hidden" onchange={onFileInput} />
 				</label>
 			{/if}
 		</div>
@@ -298,13 +307,13 @@
 				<Upload
 					class="mb-4 h-12 w-12 transition-colors {dragging ? 'text-blue-500' : 'text-neutral-600'}"
 				/>
-				<p class="mb-2 text-lg font-medium text-neutral-300">Drop an .inibin file here</p>
+				<p class="mb-2 text-lg font-medium text-neutral-300">Drop an .inibin or .ini file here</p>
 				<p class="mb-4 text-sm text-neutral-500">or click the button below</p>
 				<label
 					class="cursor-pointer rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
 				>
 					Choose File
-					<input type="file" accept=".inibin" class="hidden" onchange={onFileInput} />
+					<input type="file" accept=".inibin,.ini" class="hidden" onchange={onFileInput} />
 				</label>
 			</div>
 		</div>

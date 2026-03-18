@@ -2,6 +2,81 @@ import type { InibinData, InibinValue } from './types';
 import { ihash, read } from './inibin2';
 import { fix } from './inibin_fix';
 
+export function readIni(text: string): InibinData {
+	const result: InibinData = {
+		Values: {},
+		UNKNOWN_HASHES: {}
+	};
+
+	let currentSection: string | null = null;
+
+	const lines = text.split(/\r?\n/);
+	for (const rawLine of lines) {
+		const line = rawLine.trim();
+
+		if (line === '' || line.startsWith(';') || line.startsWith('#')) {
+			continue;
+		}
+
+		const sectionMatch = line.match(/^\[(.+)]$/);
+		if (sectionMatch) {
+			currentSection = sectionMatch[1];
+			if (currentSection !== 'UNKNOWN_HASHES' && !result.Values[currentSection]) {
+				result.Values[currentSection] = {};
+			}
+			continue;
+		}
+
+		const eqIndex = line.indexOf('=');
+		if (eqIndex === -1 || currentSection === null) {
+			continue;
+		}
+
+		const key = line.substring(0, eqIndex).trim();
+		const rawValue = line.substring(eqIndex + 1).trim();
+		const value = parseIniValue(rawValue);
+
+		if (currentSection === 'UNKNOWN_HASHES') {
+			const hashMatch = key.match(/^unk([0-9A-Fa-f]{1,8})$/);
+			if (hashMatch) {
+				const hash = parseInt(hashMatch[1], 16);
+				result.UNKNOWN_HASHES[hash] = value;
+			} else {
+				if (!result.Values['UNKNOWN_HASHES']) {
+					result.Values['UNKNOWN_HASHES'] = {};
+				}
+				result.Values['UNKNOWN_HASHES'][key] = value;
+			}
+		} else {
+			result.Values[currentSection][key] = value;
+		}
+	}
+
+	return result;
+}
+
+function parseIniValue(raw: string): InibinValue {
+	if (raw.startsWith('"') && raw.endsWith('"')) {
+		try {
+			return JSON.parse(raw) as string;
+		} catch {
+			return raw.slice(1, -1);
+		}
+	}
+
+	if (/^[-+]?(\d+\.?\d*|\d*\.?\d+)(e[-+]?\d+)?$/i.test(raw)) {
+		const n = Number(raw);
+		if (!isNaN(n)) return n;
+	}
+
+	if (/^[-+]?\d[\d.e+-]*(\s+[-+]?\d[\d.e+-]*)+$/i.test(raw)) {
+		const parts = raw.split(/\s+/).map(Number);
+		if (parts.every((n) => !isNaN(n))) return parts;
+	}
+
+	return raw;
+}
+
 /**
  * Formats a single value for INI output.
  * - Strings are JSON-quoted
