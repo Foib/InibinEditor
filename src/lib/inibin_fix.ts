@@ -1832,7 +1832,6 @@ export function getFixdict(): FixDict {
 	return all_inibin_fixdict;
 }
 
-/** Unhashes .inibin with dictionary */
 export function fix(inib: InibinData, fixd?: FixDict): void {
 	if (!fixd) {
 		fixd = getFixdict();

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { read } from '$lib/inibin2';
 	import { fix } from '$lib/inibin_fix';
+	import { troybinFix } from '$lib/troybin_fix';
 	import { writeIni, writeInibin, readIni } from '$lib/convert';
 	import type { InibinData, InibinValue } from '$lib/types';
 	import { Plus, Trash2, Upload } from '@lucide/svelte';
@@ -9,6 +10,7 @@
 	// --- State ---
 	let data: InibinData | null = $state(null);
 	let fileName: string = $state('');
+	let fileType: 'inibin' | 'troybin' = $state('inibin');
 	let error: string = $state('');
 	let dragging: boolean = $state(false);
 	let searchQuery: string = $state('');
@@ -57,7 +59,9 @@
 	async function loadFile(file: File) {
 		error = '';
 		try {
-			const isIni = file.name.toLowerCase().endsWith('.ini');
+			const nameLower = file.name.toLowerCase();
+			const isIni = nameLower.endsWith('.ini') || nameLower.endsWith('.troy');
+			const isTroybin = nameLower.endsWith('.troybin') || nameLower.endsWith('.troy');
 			let ibin: InibinData;
 
 			if (isIni) {
@@ -66,11 +70,16 @@
 			} else {
 				const buffer = await file.arrayBuffer();
 				ibin = read(buffer);
-				fix(ibin);
+				if (isTroybin) {
+					troybinFix(ibin);
+				} else {
+					fix(ibin);
+				}
 			}
 
 			data = ibin;
 			fileName = file.name;
+			fileType = isTroybin ? 'troybin' : 'inibin';
 			collapsedSections = new Set();
 			searchQuery = '';
 			activeTab = 'values';
@@ -206,16 +215,23 @@
 	}
 
 	// --- Save / Export ---
-	function saveAsIni() {
+	function saveAsText() {
 		if (!data) return;
 		const text = writeIni(data);
-		download(text, fileName.replace(/\.inibin$/i, '') + '.ini', 'text/plain');
+		const ext = fileType === 'troybin' ? '.troy' : '.ini';
+		download(text, fileName.replace(/\.(inibin|troybin|ini|troy)$/i, '') + ext, 'text/plain');
 	}
 
-	function saveAsInibin() {
+	function saveAsBinary() {
 		if (!data) return;
 		const buffer = writeInibin(data);
-		download(buffer, fileName || 'output.inibin', 'application/octet-stream');
+		const ext = fileType === 'troybin' ? '.troybin' : '.inibin';
+		const defaultName = fileType === 'troybin' ? 'output.troybin' : 'output.inibin';
+		download(
+			buffer,
+			fileName ? fileName.replace(/\.(inibin|troybin|ini|troy)$/i, '') + ext : defaultName,
+			'application/octet-stream'
+		);
 	}
 
 	function download(content: string | ArrayBuffer, name: string, mime: string) {
@@ -266,22 +282,27 @@
 		<div class="flex items-center gap-3">
 			{#if data}
 				<button
-					onclick={saveAsIni}
+					onclick={saveAsText}
 					class="cursor-pointer rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-500"
 				>
-					Export .ini
+					Export {fileType === 'troybin' ? '.troy' : '.ini'}
 				</button>
 				<button
-					onclick={saveAsInibin}
+					onclick={saveAsBinary}
 					class="cursor-pointer rounded bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-500"
 				>
-					Save .inibin
+					Save {fileType === 'troybin' ? '.troybin' : '.inibin'}
 				</button>
 				<label
 					class="cursor-pointer rounded bg-neutral-700 px-3 py-1.5 text-sm font-medium text-neutral-200 transition-colors hover:bg-neutral-600"
 				>
 					Open File
-					<input type="file" accept=".inibin,.ini" class="hidden" onchange={onFileInput} />
+					<input
+						type="file"
+						accept=".inibin,.ini,.troybin,.troy"
+						class="hidden"
+						onchange={onFileInput}
+					/>
 				</label>
 			{/if}
 		</div>
@@ -300,21 +321,41 @@
 		<!-- Drop zone / welcome screen -->
 		<div class="flex flex-1 items-center justify-center p-8">
 			<div
-				class=" flex max-w-md flex-col items-center rounded-xl border-2 border-dashed px-24 py-12 text-center transition-all {dragging
+				class=" flex flex-col items-center rounded-xl border-2 border-dashed px-32 py-12 text-center transition-all {dragging
 					? 'file-drop -translate-x-1.5 -translate-y-1.5 border-blue-400 bg-blue-950/30'
 					: 'file-drop-dragging  border-neutral-700 bg-neutral-900/50 '}"
 			>
 				<Upload
 					class="mb-4 h-12 w-12 transition-colors {dragging ? 'text-blue-500' : 'text-neutral-600'}"
 				/>
-				<p class="mb-2 text-lg font-medium text-neutral-300">Drop an .inibin or .ini file here</p>
-				<p class="mb-4 text-sm text-neutral-500">or click the button below</p>
+				<p class="mb-2 text-lg font-medium text-neutral-300">Drop a file here</p>
+
+				<p class="mb-4 text-sm text-neutral-500">or</p>
 				<label
 					class="cursor-pointer rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
 				>
 					Choose File
-					<input type="file" accept=".inibin,.ini" class="hidden" onchange={onFileInput} />
+					<input
+						type="file"
+						accept=".inibin,.ini,.troybin,.troy"
+						class="hidden"
+						onchange={onFileInput}
+					/>
 				</label>
+				<hr class="my-6 w-full border-neutral-800" />
+				<p class="text-xs text-neutral-500">
+					Supported formats:<br /><span
+						class="rounded border border-neutral-600 px-1 font-mono text-neutral-300">.inibin</span
+					>
+					<span class="rounded border border-neutral-600 px-1 font-mono text-neutral-300">.ini</span
+					>
+					<span class="rounded border border-neutral-600 px-1 font-mono text-neutral-300"
+						>.troybin</span
+					>
+					<span class="rounded border border-neutral-600 px-1 font-mono text-neutral-300"
+						>.troy</span
+					>
+				</p>
 			</div>
 		</div>
 	{:else}

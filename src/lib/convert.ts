@@ -1,6 +1,7 @@
 import type { InibinData, InibinValue } from './types';
 import { ihash, read } from './inibin2';
 import { fix } from './inibin_fix';
+import { troybinFix } from './troybin_fix';
 
 export function readIni(text: string): InibinData {
 	const result: InibinData = {
@@ -77,12 +78,6 @@ function parseIniValue(raw: string): InibinValue {
 	return raw;
 }
 
-/**
- * Formats a single value for INI output.
- * - Strings are JSON-quoted
- * - Arrays (tuples) are space-separated repr values
- * - Numbers are written as-is (floats use full precision)
- */
 function formatValue(name: string, value: InibinValue): string {
 	if (typeof value === 'string') {
 		return `${name}=${JSON.stringify(value)}\n`;
@@ -95,16 +90,9 @@ function formatValue(name: string, value: InibinValue): string {
 	}
 }
 
-/**
- * Writes parsed inibin data to INI format string.
- *
- * Sections are sorted alphabetically, and entries within each section are sorted.
- * Unknown hashes are written to an [UNKNOWN_HASHES] section with keys formatted as `unk{HASH:08X}`.
- */
 export function writeIni(ibin: InibinData): string {
 	let output = '';
 
-	// Write resolved Values sections
 	const sortedSections = Object.keys(ibin.Values).sort();
 	for (const section of sortedSections) {
 		output += `[${section}]\n`;
@@ -116,7 +104,6 @@ export function writeIni(ibin: InibinData): string {
 		output += '\n';
 	}
 
-	// Write unknown hashes section
 	const unknownKeys = Object.keys(ibin.UNKNOWN_HASHES).map(Number);
 	if (unknownKeys.length > 0) {
 		output += '[UNKNOWN_HASHES]\n';
@@ -130,44 +117,41 @@ export function writeIni(ibin: InibinData): string {
 	return output;
 }
 
-/**
- * Full inibin-to-ini conversion pipeline.
- *
- * Reads binary inibin data from an ArrayBuffer, resolves hashes using the
- * inibin fix dictionary, and returns the INI-formatted string.
- */
 export function inibin2ini(buffer: ArrayBuffer): string {
 	const ibin = read(buffer);
 	fix(ibin);
 	return writeIni(ibin);
 }
 
-/**
- * Classifies an InibinValue into a binary type category for the v2 writer.
- * Returns null for strings (handled separately).
- */
+export function troybin2troy(buffer: ArrayBuffer): string {
+	const tbin = read(buffer);
+	troybinFix(tbin);
+	return writeIni(tbin);
+}
+
 function classifyValue(value: InibinValue): { flag: number; count: number } | null {
 	if (typeof value === 'string') {
-		return { flag: 12, count: 1 }; // strings
+		return { flag: 12, count: 1 };
 	}
+
 	if (Array.isArray(value)) {
 		const len = value.length;
-		if (len === 2) return { flag: 9, count: 2 }; // 2x float
-		if (len === 3) return { flag: 7, count: 3 }; // 3x float
-		if (len === 4) return { flag: 11, count: 4 }; // 4x float
-		// Fallback: treat as multiple floats via flag 1 (shouldn't normally happen)
+		if (len === 2) return { flag: 9, count: 2 };
+		if (len === 3) return { flag: 7, count: 3 };
+		if (len === 4) return { flag: 11, count: 4 };
+
 		return { flag: 1, count: 1 };
 	}
+
 	if (typeof value === 'number') {
 		if (Number.isInteger(value)) {
-			return { flag: 0, count: 1 }; // int32
+			return { flag: 0, count: 1 };
 		}
-		return { flag: 1, count: 1 }; // float32
+		return { flag: 1, count: 1 };
 	}
 	return null;
 }
 
-/** Helper class for building binary buffers with little-endian byte order */
 class BinaryWriter {
 	private chunks: ArrayBuffer[] = [];
 	private current: DataView;
@@ -251,17 +235,9 @@ class BinaryWriter {
 	}
 }
 
-/**
- * Writes InibinData back to binary .inibin (version 2) format.
- *
- * All resolved Values entries are re-hashed to their numeric keys using ihash.
- * The writer groups entries by their value type and writes them in flag order.
- */
 export function writeInibin(ibin: InibinData): ArrayBuffer {
-	// Collect all key/value pairs back into a flat hash->value map
 	const allEntries = new Map<number, InibinValue>();
 
-	// Re-hash resolved values
 	for (const [section, names] of Object.entries(ibin.Values)) {
 		for (const [name, value] of Object.entries(names)) {
 			const hash = ihash(section, name);
@@ -269,13 +245,10 @@ export function writeInibin(ibin: InibinData): ArrayBuffer {
 		}
 	}
 
-	// Add unknown hashes as-is
 	for (const [hashStr, value] of Object.entries(ibin.UNKNOWN_HASHES)) {
 		allEntries.set(Number(hashStr), value);
 	}
 
-	// Group entries by flag type
-	// Flag buckets: 0=int32, 1=float, 7=3xfloat, 9=2xfloat, 11=4xfloat, 12=strings
 	const buckets = new Map<number, { keys: number[]; values: InibinValue[] }>();
 	for (let i = 0; i < 14; i++) {
 		buckets.set(i, { keys: [], values: [] });
@@ -290,7 +263,6 @@ export function writeInibin(ibin: InibinData): ArrayBuffer {
 		}
 	}
 
-	// Build string table for flag 12 entries
 	const stringBucket = buckets.get(12)!;
 	let stringTableBytes = new Uint8Array(0);
 	const stringOffsets: number[] = [];
@@ -303,7 +275,7 @@ export function writeInibin(ibin: InibinData): ArrayBuffer {
 			stringOffsets.push(offset);
 			const encoded = encoder.encode(str);
 			parts.push(encoded);
-			parts.push(new Uint8Array([0])); // null terminator
+			parts.push(new Uint8Array([0]));
 			offset += encoded.length + 1;
 		}
 		stringTableBytes = new Uint8Array(offset);
@@ -314,7 +286,6 @@ export function writeInibin(ibin: InibinData): ArrayBuffer {
 		}
 	}
 
-	// Compute flags
 	let flags = 0;
 	for (let i = 0; i < 14; i++) {
 		if (buckets.get(i)!.keys.length > 0) {
@@ -322,25 +293,17 @@ export function writeInibin(ibin: InibinData): ArrayBuffer {
 		}
 	}
 
-	// Write binary
 	const writer = new BinaryWriter();
 
-	// Version byte
 	writer.writeUint8(2);
-
-	// String table length
 	writer.writeUint16(stringTableBytes.length);
-
-	// Flags
 	writer.writeUint16(flags);
 
-	// Write each active flag section in order
 	for (let i = 0; i < 14; i++) {
 		if (!(flags & (1 << i))) continue;
 		const bucket = buckets.get(i)!;
 
 		if (i === 5) {
-			// Booleans: count, keys, then bit-packed values
 			writer.writeUint16(bucket.keys.length);
 			for (const key of bucket.keys) writer.writeUint32(key);
 			const bytesCount = Math.floor(bucket.keys.length / 8) + (bucket.keys.length % 8 > 0 ? 1 : 0);
@@ -352,53 +315,51 @@ export function writeInibin(ibin: InibinData): ArrayBuffer {
 			}
 			writer.writeBytes(boolBytes);
 		} else if (i === 12) {
-			// Strings: count (uint16), keys (uint32 each), offsets (uint16 each), then string table
 			writer.writeUint16(bucket.keys.length);
 			for (const key of bucket.keys) writer.writeUint32(key);
 			for (const off of stringOffsets) writer.writeUint16(off);
 			writer.writeBytes(stringTableBytes);
 		} else {
-			// Numeric types
 			writer.writeUint16(bucket.keys.length);
 			for (const key of bucket.keys) writer.writeUint32(key);
 			for (const val of bucket.values) {
 				const nums = Array.isArray(val) ? val : [val as number];
 				for (const n of nums) {
 					switch (i) {
-						case 0: // int32
+						case 0:
 							writer.writeInt32(Math.round(n));
 							break;
-						case 1: // float32
+						case 1:
 							writer.writeFloat32(n);
 							break;
-						case 2: // byte * 0.1
+						case 2:
 							writer.writeUint8(Math.round(n / 0.1));
 							break;
-						case 3: // int16
+						case 3:
 							writer.writeUint16(Math.round(n) & 0xffff);
 							break;
-						case 4: // byte
+						case 4:
 							writer.writeUint8(Math.round(n) & 0xff);
 							break;
-						case 6: // 3x byte * 0.1
+						case 6:
 							writer.writeUint8(Math.round(n / 0.1));
 							break;
-						case 7: // 3x float
+						case 7:
 							writer.writeFloat32(n);
 							break;
-						case 8: // 2x byte * 0.1
+						case 8:
 							writer.writeUint8(Math.round(n / 0.1));
 							break;
-						case 9: // 2x float
+						case 9:
 							writer.writeFloat32(n);
 							break;
-						case 10: // 4x byte * 0.1
+						case 10:
 							writer.writeUint8(Math.round(n / 0.1));
 							break;
-						case 11: // 4x float
+						case 11:
 							writer.writeFloat32(n);
 							break;
-						case 13: // int64 -- write as two int32s (lo, hi)
+						case 13:
 							writer.writeInt32(n & 0xffffffff);
 							writer.writeInt32(Math.floor(n / 0x100000000));
 							break;

@@ -1,10 +1,5 @@
 import type { InibinData, InibinValue } from './types';
 
-/**
- * Hashes a string using the inibin hash algorithm.
- * If both section and name are provided, hashes "section*name".
- * Can also be called with a single string and an optional initial hash value.
- */
 export function ihash(section: string, name?: string): number;
 export function ihash(value: string, initialHash?: number): number;
 export function ihash(sectionOrValue: string, nameOrInitialHash?: string | number): number {
@@ -25,7 +20,6 @@ export function ihash(sectionOrValue: string, nameOrInitialHash?: string | numbe
 	return ret >>> 0;
 }
 
-// Sanitize regexps - converts string values to their proper types
 const RE_TRUE = /^\s*true\s*$/i;
 const RE_FALSE = /^\s*false\s*$/i;
 const RE_NAN = /^\s*NaN\s*$/i;
@@ -35,9 +29,6 @@ const RE_INT_VEC = /^\s*(?:[-+]?\d+\s+)+(?:[-+]?\d+)\s*$/i;
 const RE_DECIMAL_VEC =
 	/^\s*(?:[+-]?(?:\d+\.\d*|\d*\.\d+|\d+)(?:e[+-]?\d+)?\s+)+([+-]?(?:\d+\.\d*|\d*\.\d+|\d+)(?:e[+-]?\d+)?)\s*$/i;
 
-/**
- * Converts string values stored in inibin to their proper typed representation.
- */
 export function sanitizeStr(data: string): InibinValue {
 	if (RE_TRUE.test(data)) {
 		return 1;
@@ -66,7 +57,6 @@ export function sanitizeStr(data: string): InibinValue {
 	}
 }
 
-/** A simple wrapper around DataView for sequential reading with little-endian byte order */
 class BinaryReader {
 	private view: DataView;
 	private offset: number;
@@ -223,11 +213,7 @@ function readBools(reader: BinaryReader): Record<number, InibinValue> {
 
 function readStrings(reader: BinaryReader, stringsLength: number): Record<number, InibinValue> {
 	const result: Record<number, InibinValue> = {};
-
-	// Read offsets using the same readNumbers pattern (uint16 values)
 	const offsets = readNumbers(reader, 'uint16');
-
-	// Read string data block
 	const data = reader.readBytes(stringsLength);
 
 	for (const keyStr of Object.keys(offsets)) {
@@ -244,15 +230,11 @@ function readStrings(reader: BinaryReader, stringsLength: number): Record<number
 	return result;
 }
 
-/**
- * Reads a version 2 inibin file from a binary reader into the target hash map.
- */
 function readV2(reader: BinaryReader, target: Record<number, InibinValue>): void {
 	const stringsLength = reader.readUint16();
 	let flags = reader.readUint16();
 
 	if (flags === 0) {
-		// Some files have an extra 2 bytes before the real flags
 		if (reader.position < reader.byteLength) {
 			flags = reader.readUint16();
 		}
@@ -264,20 +246,20 @@ function readV2(reader: BinaryReader, target: Record<number, InibinValue>): void
 	};
 
 	const readConf: ReadConfig[] = [
-		{ reader: readNumbers, args: ['int32', 1] }, // 0  - 1 x int32
-		{ reader: readNumbers, args: ['float32', 1] }, // 1  - 1 x float
-		{ reader: readNumbers, args: ['uint8', 1, 0.1] }, // 2  - 1 x byte * 0.1
-		{ reader: readNumbers, args: ['int16', 1] }, // 3  - 1 x short
-		{ reader: readNumbers, args: ['uint8', 1] }, // 4  - 1 x byte
-		{ reader: readBools, args: [] }, // 5  - bools
-		{ reader: readNumbers, args: ['uint8', 3, 0.1] }, // 6  - 3 x byte * 0.1
-		{ reader: readNumbers, args: ['float32', 3] }, // 7  - 3 x float
-		{ reader: readNumbers, args: ['uint8', 2, 0.1] }, // 8  - 2 x byte * 0.1
-		{ reader: readNumbers, args: ['float32', 2] }, // 9  - 2 x float
-		{ reader: readNumbers, args: ['uint8', 4, 0.1] }, // 10 - 4 x byte * 0.1
-		{ reader: readNumbers, args: ['float32', 4] }, // 11 - 4 x float
-		{ reader: readStrings, args: [stringsLength] }, // 12 - strings
-		{ reader: readNumbers, args: ['int64', 1] } // 13 - long long
+		{ reader: readNumbers, args: ['int32', 1] },
+		{ reader: readNumbers, args: ['float32', 1] },
+		{ reader: readNumbers, args: ['uint8', 1, 0.1] },
+		{ reader: readNumbers, args: ['int16', 1] },
+		{ reader: readNumbers, args: ['uint8', 1] },
+		{ reader: readBools, args: [] },
+		{ reader: readNumbers, args: ['uint8', 3, 0.1] },
+		{ reader: readNumbers, args: ['float32', 3] },
+		{ reader: readNumbers, args: ['uint8', 2, 0.1] },
+		{ reader: readNumbers, args: ['float32', 2] },
+		{ reader: readNumbers, args: ['uint8', 4, 0.1] },
+		{ reader: readNumbers, args: ['float32', 4] },
+		{ reader: readStrings, args: [stringsLength] },
+		{ reader: readNumbers, args: ['int64', 1] }
 	];
 
 	if (flags & (1 << 13)) {
@@ -292,7 +274,6 @@ function readV2(reader: BinaryReader, target: Record<number, InibinValue>): void
 		if (flags & (1 << i)) {
 			if (i < readConf.length) {
 				const conf = readConf[i];
-				// eslint-disable-next-line @typescript-eslint/no-explicit-any
 				const entries = (conf.reader as any)(reader, ...conf.args);
 				Object.assign(target, entries);
 			} else {
@@ -302,11 +283,7 @@ function readV2(reader: BinaryReader, target: Record<number, InibinValue>): void
 	}
 }
 
-/**
- * Reads a version 1 inibin file from a binary reader into the target hash map.
- */
 function readV1(reader: BinaryReader, target: Record<number, InibinValue>): void {
-	// Skip 3 bytes (unknown header data)
 	reader.skip(3);
 
 	const entryCount = reader.readUint32();
@@ -333,11 +310,6 @@ function readV1(reader: BinaryReader, target: Record<number, InibinValue>): void
 	}
 }
 
-/**
- * Reads an inibin file from an ArrayBuffer, auto-detecting the version (1 or 2).
- * Returns the parsed InibinData with all values initially in UNKNOWN_HASHES.
- * Use `fix()` from inibin_fix.ts to resolve hashes to section/name pairs.
- */
 export function read(buffer: ArrayBuffer, result?: InibinData): InibinData {
 	if (!result) {
 		result = {
@@ -370,10 +342,6 @@ export function read(buffer: ArrayBuffer, result?: InibinData): InibinData {
 	return result;
 }
 
-/**
- * Gets an entry from parsed inibin data by section and name.
- * First checks resolved Values, then falls back to hash lookup in UNKNOWN_HASHES.
- */
 export function get(
 	target: InibinData,
 	section: string,
