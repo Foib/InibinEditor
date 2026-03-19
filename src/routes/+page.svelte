@@ -253,7 +253,7 @@
 </script>
 
 <svelte:head>
-	<title>{fileName ? `${fileName} - Inibin Editor` : 'Inibin Editor'}</title>
+	<title>{fileName ? `${fileName} - LoLxbin Editor` : 'LoLxbin Editor'}</title>
 </svelte:head>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -267,7 +267,7 @@
 	<header class="flex items-center justify-between border-b border-neutral-800 px-6 py-2">
 		<div class="flex items-center gap-4">
 			<img src={favicon} alt="" class="h-12 w-12" />
-			<h1 class="text-xl font-bold text-white">Inibin Editor</h1>
+			<h1 class="text-xl font-bold text-white">LoLxbin Editor</h1>
 			{#if data}
 				<span
 					class="rounded-full border border-neutral-700 bg-neutral-800 px-2 py-0.5 font-mono text-sm text-neutral-400"

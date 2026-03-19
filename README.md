@@ -1,11 +1,11 @@
-# Inibin Editor
+# LoLxbin Editor
 
 A browser-based editor for League of Legends `.inibin`, `.ini`, `.troybin` and `.troy` files
 
 > [!NOTE]
 >
 > - This project was vibe coded
-> - Inibin conversion was ported from [lolpytools](https://github.com/moonshadow565/lolpytools/)
+> - Inibin and Troybin conversion was ported from [lolpytools](https://github.com/moonshadow565/lolpytools/)
 
 ## Features
 
