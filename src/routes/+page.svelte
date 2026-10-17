@@ -1,16 +1,35 @@
 <script lang="ts">
-	import { read } from '$lib/inibin2';
-	import { fix } from '$lib/inibin_fix';
-	import { troybinFix } from '$lib/troybin_fix';
-	import { writeIni, writeInibin, readIni } from '$lib/convert';
-	import type { InibinData, InibinValue } from '$lib/types';
+	import {
+		openFile,
+		parseInputValue,
+		formatDisplay,
+		formatHash,
+		getSections,
+		getUnknownKeys,
+		filterSections,
+		countEntries,
+		addSection as addSectionTo,
+		removeSection as removeSectionFrom,
+		setEntry,
+		removeEntry as removeEntryFrom,
+		setUnknownValue,
+		removeUnknownEntry as removeUnknownEntryFrom,
+		exportText,
+		exportBinary,
+		exportFileName,
+		SUPPORTED_EXTENSIONS,
+		type FileType
+	} from '$lib/editor';
+	import type { InibinData } from '$lib/types';
 	import { Plus, Trash2, Upload } from '@lucide/svelte';
 	import favicon from '$lib/assets/favicon.svg';
+
+	const accept = SUPPORTED_EXTENSIONS.join(',');
 
 	// --- State ---
 	let data: InibinData | null = $state(null);
 	let fileName: string = $state('');
-	let fileType: 'inibin' | 'troybin' = $state('inibin');
+	let fileType: FileType = $state('inibin');
 	let error: string = $state('');
 	let dragging: boolean = $state(false);
 	let searchQuery: string = $state('');
@@ -26,60 +45,19 @@
 	let newEntryValue: string = $state('');
 
 	// --- Derived ---
-	let sections = $derived.by(() => {
-		if (!data) return [] as string[];
-		return Object.keys(data.Values).sort();
-	});
-	let unknownKeys = $derived.by(() => {
-		if (!data) return [] as number[];
-		return Object.keys(data.UNKNOWN_HASHES)
-			.map(Number)
-			.sort((a, b) => a - b);
-	});
-	let filteredSections = $derived.by(() => {
-		if (!searchQuery) return sections;
-		const q = searchQuery.toLowerCase();
-		return sections.filter(
-			(s) =>
-				s.toLowerCase().includes(q) ||
-				(data && Object.keys(data.Values[s]).some((k) => k.toLowerCase().includes(q)))
-		);
-	});
-	let totalEntries = $derived.by(() => {
-		if (!data) return 0;
-		let count = 0;
-		for (const section of Object.values(data.Values)) {
-			count += Object.keys(section).length;
-		}
-		count += Object.keys(data.UNKNOWN_HASHES).length;
-		return count;
-	});
+	let sections = $derived(data ? getSections(data) : []);
+	let unknownKeys = $derived(data ? getUnknownKeys(data) : []);
+	let filteredSections = $derived(data ? filterSections(data, searchQuery) : []);
+	let totalEntries = $derived(data ? countEntries(data) : 0);
 
 	// --- File loading ---
 	async function loadFile(file: File) {
 		error = '';
 		try {
-			const nameLower = file.name.toLowerCase();
-			const isIni = nameLower.endsWith('.ini') || nameLower.endsWith('.troy');
-			const isTroybin = nameLower.endsWith('.troybin') || nameLower.endsWith('.troy');
-			let ibin: InibinData;
-
-			if (isIni) {
-				const text = await file.text();
-				ibin = readIni(text);
-			} else {
-				const buffer = await file.arrayBuffer();
-				ibin = read(buffer);
-				if (isTroybin) {
-					troybinFix(ibin);
-				} else {
-					fix(ibin);
-				}
-			}
-
-			data = ibin;
-			fileName = file.name;
-			fileType = isTroybin ? 'troybin' : 'inibin';
+			const opened = openFile(file.name, await file.arrayBuffer());
+			data = opened.data;
+			fileName = opened.fileName;
+			fileType = opened.fileType;
 			collapsedSections = new Set();
 			searchQuery = '';
 			activeTab = 'values';
@@ -131,124 +109,81 @@
 		collapsedSections = new Set();
 	}
 
-	// --- Value editing ---
+	// --- Editing ---
+	/** Runs an edit, showing any error in the banner */
+	function edit(action: (data: InibinData) => void): boolean {
+		if (!data) return false;
+		try {
+			action(data);
+			return true;
+		} catch (e) {
+			error = e instanceof Error ? e.message : String(e);
+			return false;
+		}
+	}
+
 	function updateValue(section: string, name: string, rawValue: string) {
-		if (!data) return;
-		const parsed = parseInputValue(rawValue);
-		data.Values[section][name] = parsed;
+		edit((d) => setEntry(d, section, name, parseInputValue(rawValue)));
 	}
 
 	function updateUnknownValue(hash: number, rawValue: string) {
-		if (!data) return;
-		const parsed = parseInputValue(rawValue);
-		data.UNKNOWN_HASHES[hash] = parsed;
-	}
-
-	function parseInputValue(raw: string): InibinValue {
-		const trimmed = raw.trim();
-		// Try number
-		if (/^[-+]?\d+$/.test(trimmed)) return parseInt(trimmed, 10);
-		if (/^[-+]?(\d+\.?\d*|\d*\.?\d+)(e[-+]?\d+)?$/i.test(trimmed)) return parseFloat(trimmed);
-		// Try number array (space-separated)
-		if (/^[-+]?\d[\d.e+-]*(\s+[-+]?\d[\d.e+-]*)+$/i.test(trimmed)) {
-			return trimmed.split(/\s+/).map(Number);
-		}
-		// String (strip quotes if wrapped)
-		if (
-			(trimmed.startsWith('"') && trimmed.endsWith('"')) ||
-			(trimmed.startsWith("'") && trimmed.endsWith("'"))
-		) {
-			return trimmed.slice(1, -1);
-		}
-		return trimmed;
-	}
-
-	function formatDisplay(value: InibinValue): string {
-		if (typeof value === 'string') return JSON.stringify(value);
-		if (Array.isArray(value)) return value.join(' ');
-		return String(value);
+		edit((d) => setUnknownValue(d, hash, parseInputValue(rawValue)));
 	}
 
 	// --- Add / Remove ---
 	function addSection() {
-		if (!data || !newSectionName.trim()) return;
-		const name = newSectionName.trim();
-		if (data.Values[name]) {
-			error = `Section "${name}" already exists`;
-			return;
+		if (!newSectionName.trim()) return;
+		if (edit((d) => addSectionTo(d, newSectionName))) {
+			newSectionName = '';
+			error = '';
 		}
-		data.Values[name] = {};
-		newSectionName = '';
-		error = '';
 	}
 
 	function removeSection(section: string) {
-		if (!data) return;
-		delete data.Values[section];
-		// Trigger reactivity
-		data = { ...data, Values: { ...data.Values } };
+		edit((d) => removeSectionFrom(d, section));
 	}
 
 	function addEntry() {
-		if (!data || !newEntrySection || !newEntryName.trim()) return;
-		const section = newEntrySection;
-		const name = newEntryName.trim();
-		if (!data.Values[section]) {
-			data.Values[section] = {};
+		if (!newEntrySection || !newEntryName.trim()) return;
+		const value = parseInputValue(newEntryValue || '0');
+		if (edit((d) => setEntry(d, newEntrySection, newEntryName, value))) {
+			newEntryName = '';
+			newEntryValue = '';
+			error = '';
 		}
-		data.Values[section][name] = parseInputValue(newEntryValue || '0');
-		newEntryName = '';
-		newEntryValue = '';
-		error = '';
 	}
 
 	function removeEntry(section: string, name: string) {
-		if (!data) return;
-		delete data.Values[section][name];
-		data = { ...data, Values: { ...data.Values, [section]: { ...data.Values[section] } } };
+		edit((d) => removeEntryFrom(d, section, name));
 	}
 
 	function removeUnknownEntry(hash: number) {
-		if (!data) return;
-		delete data.UNKNOWN_HASHES[hash];
-		data = { ...data, UNKNOWN_HASHES: { ...data.UNKNOWN_HASHES } };
+		edit((d) => removeUnknownEntryFrom(d, hash));
 	}
 
 	// --- Save / Export ---
 	function saveAsText() {
 		if (!data) return;
-		const text = writeIni(data);
-		const ext = fileType === 'troybin' ? '.troy' : '.ini';
-		download(text, fileName.replace(/\.(inibin|troybin|ini|troy)$/i, '') + ext, 'text/plain');
+		download(exportText(data), exportFileName(fileName, fileType, 'text'), 'text/plain');
 	}
 
 	function saveAsBinary() {
 		if (!data) return;
-		const buffer = writeInibin(data);
-		const ext = fileType === 'troybin' ? '.troybin' : '.inibin';
-		const defaultName = fileType === 'troybin' ? 'output.troybin' : 'output.inibin';
 		download(
-			buffer,
-			fileName ? fileName.replace(/\.(inibin|troybin|ini|troy)$/i, '') + ext : defaultName,
+			exportBinary(data),
+			exportFileName(fileName, fileType, 'binary'),
 			'application/octet-stream'
 		);
 	}
 
 	function download(content: string | ArrayBuffer, name: string, mime: string) {
-		const blob =
-			content instanceof ArrayBuffer
-				? new Blob([content], { type: mime })
-				: new Blob([content], { type: mime });
+		const blob = new Blob([content], { type: mime });
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
 		a.href = url;
 		a.download = name;
 		a.click();
 		URL.revokeObjectURL(url);
-	}
-
-	function formatHash(hash: number): string {
-		return `unk${hash.toString(16).toUpperCase().padStart(8, '0')}`;
 	}
 </script>
 
@@ -297,12 +232,7 @@
 					class="cursor-pointer rounded bg-neutral-700 px-3 py-1.5 text-sm font-medium text-neutral-200 transition-colors hover:bg-neutral-600"
 				>
 					Open File
-					<input
-						type="file"
-						accept=".inibin,.ini,.troybin,.troy"
-						class="hidden"
-						onchange={onFileInput}
-					/>
+					<input type="file" {accept} class="hidden" onchange={onFileInput} />
 				</label>
 			{/if}
 		</div>
@@ -335,12 +265,7 @@
 					class="cursor-pointer rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500"
 				>
 					Choose File
-					<input
-						type="file"
-						accept=".inibin,.ini,.troybin,.troy"
-						class="hidden"
-						onchange={onFileInput}
-					/>
+					<input type="file" {accept} class="hidden" onchange={onFileInput} />
 				</label>
 				<hr class="my-6 w-full border-neutral-800" />
 				<p class="text-xs text-neutral-500">
